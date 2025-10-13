@@ -3,7 +3,7 @@ import { updateNote, toggleNotePublic } from "@/lib/note-service";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { Share, Globe, Lock } from "lucide-react";
+import { Share, Globe, Lock, Maximize, Minimize } from "lucide-react";
 import { toast } from "sonner";
 import { Note } from "@/lib/supabase";
 import { ShareManagement } from "./sharing/ShareManagement";
@@ -21,8 +21,10 @@ export function NoteEditor({ note, onNoteUpdated }: NoteEditorProps) {
   const [saving, setSaving] = useState(false);
   const [isPublic, setIsPublic] = useState(note?.is_public || false);
   const [showShareSettings, setShowShareSettings] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
+  const focusModeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (note) {
@@ -35,6 +37,34 @@ export function NoteEditor({ note, onNoteUpdated }: NoteEditorProps) {
       setIsPublic(false);
     }
   }, [note]);
+
+  // Handle ESC key to exit focus mode
+  useEffect(() => {
+    const handleEscKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && focusMode) {
+        setFocusMode(false);
+      }
+    };
+
+    if (focusMode) {
+      document.addEventListener("keydown", handleEscKey);
+      return () => document.removeEventListener("keydown", handleEscKey);
+    }
+  }, [focusMode]);
+
+  // Handle click outside to exit focus mode
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (focusModeRef.current && !focusModeRef.current.contains(e.target as Node)) {
+        setFocusMode(false);
+      }
+    };
+
+    if (focusMode) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [focusMode]);
 
   // Save note changes with debounce
   const debouncedSaveNote = useRef(
@@ -94,45 +124,89 @@ export function NoteEditor({ note, onNoteUpdated }: NoteEditorProps) {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b">
-        <Input
-          ref={titleRef}
-          value={title}
-          onChange={handleTitleChange}
-          className="text-lg font-medium border-none shadow-none focus-visible:ring-0"
-          placeholder="Note title"
-        />
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowShareSettings(!showShareSettings)}
-          >
-            <Share className="h-4 w-4 mr-2" />
-            Share
-          </Button>
-          
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleTogglePublic}
-            className={isPublic ? "text-amber-500" : "text-muted-foreground"}
-          >
-            {isPublic ? (
-              <>
-                <Globe className="h-4 w-4 mr-2" />
-                Public
-              </>
-            ) : (
-              <>
-                <Lock className="h-4 w-4 mr-2" />
-                Private
-              </>
-            )}
-          </Button>
+    <>
+      {focusMode && (
+        <div className="fixed inset-0 z-50 bg-background">
+          <div ref={focusModeRef} className="flex flex-col h-full max-w-4xl mx-auto">
+            <div className="flex items-center justify-between p-4">
+              <Input
+                value={title}
+                onChange={handleTitleChange}
+                className="text-2xl font-bold border-none shadow-none focus-visible:ring-0"
+                placeholder="Note title"
+              />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFocusMode(false)}
+                title="Exit Focus Mode (ESC)"
+              >
+                <Minimize className="h-4 w-4 mr-2" />
+                Exit Focus
+              </Button>
+            </div>
+            <Textarea
+              value={content}
+              onChange={handleContentChange}
+              placeholder="Write your note here..."
+              className="flex-1 resize-none p-4 text-lg rounded-none border-0 shadow-none focus-visible:ring-0"
+            />
+            <div className="p-2 text-xs text-muted-foreground flex justify-end">
+              {saving ? "Saving..." : "All changes saved"}
+            </div>
+          </div>
         </div>
-      </div>
+      )}
+      
+      <div className="flex flex-col h-full">
+        <div className="flex items-center justify-between p-4 border-b">
+          <Input
+            ref={titleRef}
+            value={title}
+            onChange={handleTitleChange}
+            className="text-lg font-medium border-none shadow-none focus-visible:ring-0"
+            placeholder="Note title"
+          />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setFocusMode(true)}
+              title="Focus Mode (fullscreen)"
+            >
+              <Maximize className="h-4 w-4 mr-2" />
+              Focus
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShareSettings(!showShareSettings)}
+            >
+              <Share className="h-4 w-4 mr-2" />
+              Share
+            </Button>
+            
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleTogglePublic}
+              className={isPublic ? "text-amber-500" : "text-muted-foreground"}
+            >
+              {isPublic ? (
+                <>
+                  <Globe className="h-4 w-4 mr-2" />
+                  Public
+                </>
+              ) : (
+                <>
+                  <Lock className="h-4 w-4 mr-2" />
+                  Private
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
 
       <Tabs defaultValue="editor" className="flex-1 flex flex-col">
         <div className="border-b px-4">
@@ -162,9 +236,10 @@ export function NoteEditor({ note, onNoteUpdated }: NoteEditorProps) {
         </TabsContent>
       </Tabs>
 
-      <div className="p-2 text-xs text-muted-foreground flex justify-end">
-        {saving ? "Saving..." : "All changes saved"}
+        <div className="p-2 text-xs text-muted-foreground flex justify-end">
+          {saving ? "Saving..." : "All changes saved"}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
